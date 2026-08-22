@@ -1,4 +1,6 @@
 using DotnetDynamicExpressionsDemo.Data;
+using DotnetDynamicExpressionsDemo.Queries;
+using DotnetDynamicExpressionsDemo.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +20,15 @@ builder.Services
         )
     );
 
+// QueryBuilder
+builder.Services.AddTransient<IQueryBuilder, QueryBuilder>();
+
+// QueryService
+builder.Services.AddScoped<IQueryService, QueryService>();
+
+// Controllers
+builder.Services.AddControllers();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -27,5 +38,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Controllers
+app.MapControllers();
 
 app.Run();

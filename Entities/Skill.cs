@@ -1,5 +1,5 @@
 namespace DotnetDynamicExpressionsDemo.Entities {
-    public class Skill {
+    public class Skill : IEntity {
         public int Id { get; set; }
 
         public required string Name { get; set; }
