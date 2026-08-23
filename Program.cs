@@ -1,4 +1,5 @@
 using DotnetDynamicExpressionsDemo.Data;
+using DotnetDynamicExpressionsDemo.Handlers;
 using DotnetDynamicExpressionsDemo.Queries;
 using DotnetDynamicExpressionsDemo.Services;
 using Microsoft.EntityFrameworkCore;
@@ -30,6 +31,9 @@ builder.Services.AddScoped<IUserService, UserService>();
 // Controllers
 builder.Services.AddControllers();
 
+// HTTP Exceptions
+builder.Services.AddExceptionHandler<HttpExceptionHandler>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -42,5 +46,8 @@ if (app.Environment.IsDevelopment())
 
 // Controllers
 app.MapControllers();
+
+// HTTP Exceptions
+app.UseExceptionHandler(_ => {});
 
 app.Run();
