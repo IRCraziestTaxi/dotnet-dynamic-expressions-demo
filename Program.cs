@@ -23,8 +23,9 @@ builder.Services
 // QueryBuilder
 builder.Services.AddTransient<IQueryBuilder, QueryBuilder>();
 
-// QueryService
+// Services
 builder.Services.AddScoped<IQueryService, QueryService>();
+builder.Services.AddScoped<IUserService, UserService>();
 
 // Controllers
 builder.Services.AddControllers();
