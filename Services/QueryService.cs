@@ -14,17 +14,10 @@ namespace DotnetDynamicExpressionsDemo.Services {
                 throw new BadHttpRequestException(errorMessage);
             }
 
-            IEnumerable<IEntity> results;
-
-            switch (query.Scope) {
-                case "user": {
-                    results = await QueryUsers(query);
-                    break;
-                }
-                default: {
-                    throw new BadHttpRequestException("Invalid scope.");
-                }
-            }
+            IEnumerable<IEntity> results = query.Scope switch {
+                "user" => await QueryUsers(query),
+                _ => throw new BadHttpRequestException("Invalid scope.")
+            };
 
             return results;
         }
