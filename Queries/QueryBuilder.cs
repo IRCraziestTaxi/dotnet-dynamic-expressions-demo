@@ -8,7 +8,10 @@ namespace DotnetDynamicExpressionsDemo.Queries {
         private readonly ParameterExpression _skillParam = Expression.Parameter(typeof(Skill), "s");
 
         public Expression<Func<T, bool>> BuildQuery<T>(Query query) {
-            return BuildQueryExpression<T>(query, query.Scope, query.Scope);
+            var expr = BuildQueryExpression(query, query.Scope, query.Scope);
+            var param = GetParameter(query.Scope!);
+
+            return Expression.Lambda<Func<T, bool>>(expr, param);
         }
 
         /// <summary>
@@ -25,108 +28,79 @@ namespace DotnetDynamicExpressionsDemo.Queries {
             return ValidateQueryNodes(query);
         }
 
-        private Expression<Func<T, bool>> BuildQueryCondition<T>(Query query, string scope) {
-            ParameterExpression propParam;
-
-            switch (scope) {
-                case "user": {
-                    propParam = _userParam;
-                    break;
-                }
-                case "skill": {
-                    propParam = _skillParam;
-                    break;
-                }
-                default: {
-                    throw new BadHttpRequestException("Invalid scope; must correspond to entity name.");
-                }
-            }
-
-            var propName = char.ToUpper(scope[0]) + scope[1..];
+        private BinaryExpression BuildQueryCondition(Query query, string scope) {
+            var propParam = GetParameter(scope);
+            var propName = char.ToUpper(query.Prop![0]) + query.Prop[1..];
             var propExpr = Expression.Property(propParam, propName);
             var propVal = Expression.Constant(query.IntVal.HasValue ? query.IntVal.Value : query.StrVal!);
-            BinaryExpression opExpr;
 
-            switch (query.Op) {
-                case "lt": {
-                    opExpr = Expression.LessThan(propExpr, propVal);
-                    break;
-                }
-                case "lte": {
-                    opExpr = Expression.LessThanOrEqual(propExpr, propVal);
-                    break;
-                }
-                case "gt": {
-                    opExpr = Expression.GreaterThan(propExpr, propVal);
-                    break;
-                }
-                case "gte": {
-                    opExpr = Expression.GreaterThanOrEqual(propExpr, propVal);
-                    break;
-                }
-                case "eq": {
-                    opExpr = Expression.Equal(propExpr, propVal);
-                    break;
-                }
-                case "neq": {
-                    opExpr = Expression.NotEqual(propExpr, propVal);
-                    break;
-                }
-                default: {
-                    throw new BadHttpRequestException("Valid values for op are \"lt\", \"lte\", \"gt\", \"gte\", \"eq\", and \"neq\".");
-                }
-            }
-
-            var predicate = Expression.Lambda<Func<T, bool>>(opExpr, propParam);
-
-            return predicate;
+            return query.Op switch {
+                "lt" => Expression.LessThan(propExpr, propVal),
+                "lte" => Expression.LessThanOrEqual(propExpr, propVal),
+                "gt" => Expression.GreaterThan(propExpr, propVal),
+                "gte" => Expression.GreaterThanOrEqual(propExpr, propVal),
+                "eq" => Expression.Equal(propExpr, propVal),
+                "neq" => Expression.NotEqual(propExpr, propVal),
+                _ => throw new BadHttpRequestException("Valid values for op are \"lt\", \"lte\", \"gt\", \"gte\", \"eq\", and \"neq\".")
+            };
         }
 
-        private Expression<Func<T, bool>> BuildQueryExpression<T>(Query query, string? currentScope, string? ambientScope) {
+        private Expression BuildQueryExpression(Query query, string? currentScope, string? parentScope) {
             bool isAnd = query.And.Count > 0;
             List<Query> subqueries = isAnd ? query.And : query.Or;
 
             if (subqueries.Count > 0) {
-                List<Expression<Func<T, bool>>> subqueryExpressions = [];
+                List<Expression> subqueryExpressions = [];
 
                 foreach (Query subquery in subqueries) {
-                    var subqueryExpr = BuildQueryExpression<T>(subquery, subquery.Scope, subquery.Scope ?? ambientScope);
+                    var subqueryExpr = BuildQueryExpression(subquery, subquery.Scope ?? currentScope, currentScope);
                     subqueryExpressions.Add(subqueryExpr);
                 }
 
-                Expression<Func<T, bool>>? combinedExpr = null;
+                Expression? combinedExpr = null;
 
                 foreach (var subqueryExpr in subqueryExpressions) {
                     if (combinedExpr == null) {
                         combinedExpr = subqueryExpr;
                     }
                     else {
-                        var andOrExpr = isAnd
-                            ? Expression.AndAlso(combinedExpr.Body, subqueryExpr.Body)
-                            : Expression.OrElse(combinedExpr.Body, subqueryExpr.Body);
-                        combinedExpr = Expression.Lambda<Func<T, bool>>(andOrExpr, combinedExpr.Parameters.First());
+                        combinedExpr = isAnd
+                            ? Expression.AndAlso(combinedExpr, subqueryExpr)
+                            : Expression.OrElse(combinedExpr, subqueryExpr);
                     }
                 }
 
                 // If crossing scope boundaries and current scope is "skill",
                 // that signals this is the beginning of a User.Skills.Any expression.
-                if (currentScope == "skill" && currentScope != ambientScope) {
+                if (currentScope == "skill" && currentScope != parentScope) {
                     var skillsProp = Expression.Property(_userParam, nameof(User.Skills));
+                    var skillsPredicate = Expression.Lambda<Func<Skill, bool>>(
+                        combinedExpr!,
+                        _skillParam
+                    );
                     var callExpr = Expression.Call(
                         typeof(Enumerable),
                         nameof(Enumerable.Any),
                         [typeof(Skill)],
                         skillsProp,
-                        combinedExpr!
+                        skillsPredicate
                     );
-                    combinedExpr = Expression.Lambda<Func<T, bool>>(callExpr, _userParam);
+                    combinedExpr = Expression.Lambda(callExpr, _userParam).Body;
                 }
 
                 return combinedExpr!;
             }
             else {
-                return BuildQueryCondition<T>(query, currentScope ?? ambientScope!);
+                return BuildQueryCondition(query, currentScope ?? parentScope!);
             }
+        }
+
+        private ParameterExpression GetParameter(string scope) {
+            return scope switch {
+                "user" => _userParam,
+                "skill" => _skillParam,
+                _ => throw new BadHttpRequestException("Invalid scope.")
+            };
         }
 
         private string? ValidateQueryNodes(Query query) {
@@ -156,7 +130,7 @@ namespace DotnetDynamicExpressionsDemo.Queries {
                 List<Query> subqueries = hasAnd ? query.And : query.Or;
 
                 foreach (Query subquery in subqueries) {
-                    string? errorMessage = ValidateQuery(subquery);
+                    string? errorMessage = ValidateQueryNodes(subquery);
 
                     if (!string.IsNullOrEmpty(errorMessage)) {
                         return errorMessage;
@@ -177,9 +151,6 @@ namespace DotnetDynamicExpressionsDemo.Queries {
 
             return (
                 !string.IsNullOrEmpty(query.Prop)
-                // Validate that Query.Prop is a dot-separated string, i.e. "user.yearsExperience" or "skill.name".
-                && query.Prop.IndexOf('.') > 0
-                && query.Prop.IndexOf('.') < query.Prop.Length - 1
                 && !string.IsNullOrEmpty(query.Op)
                 && (
                     !string.IsNullOrEmpty(query.StrVal)

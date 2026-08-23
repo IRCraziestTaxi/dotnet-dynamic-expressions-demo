@@ -29,9 +29,20 @@ namespace DotnetDynamicExpressionsDemo.Services {
             return results;
         }
 
-        private async Task<IEnumerable<User>> QueryUsers(Query query) {
+        private async Task<IEnumerable<UserResult>> QueryUsers(Query query) {
             var queryExpr = _queryBuilder.BuildQuery<User>(query);
-            var results = await _dbContext.Users.Include(u => u.Skills).Where(queryExpr).ToListAsync();
+            var users = await _dbContext.Users.Include(u => u.Skills).Where(queryExpr).ToListAsync();
+            var results = users.Select(u => new UserResult {
+                Id = u.Id,
+                Name = u.Name,
+                YearsExperience = u.YearsExperience,
+                Skills = u.Skills.Select(s => new SkillResult {
+                    Id = s.Id,
+                    Name = s.Name,
+                    YearsExperience = s.YearsExperience,
+                    UserId = s.UserId
+                })
+            });
 
             return results;
         }

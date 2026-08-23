@@ -5,7 +5,7 @@ namespace DotnetDynamicExpressionsDemo.Models {
         /// <summary>
         /// Used to signal which entity should be used for the current or nested conditions.
         /// </summary>
-        [AllowedValues("user", "skill", ErrorMessage = "Allowed scopes are \"user\" and \"skill\".")]
+        [AllowedValues("user", "skill", null, ErrorMessage = "Allowed scopes are \"user\" and \"skill\".")]
         public string? Scope { get; set; }
 
         /// <summary>
@@ -19,7 +19,7 @@ namespace DotnetDynamicExpressionsDemo.Models {
         /// If these properties exist, And and Or cannot be used. Value must be one of the following:
         /// "lt", "gt", "lte", "gte", "eq", or "neq".
         /// </summary>
-        [AllowedValues("lt", "gt", "lte", "gte", "eq", "neq", ErrorMessage = "Allowed operations are \"lt\", \"gt\", \"lte\", \"gte\", \"eq\", and \"neq\".")]
+        [AllowedValues("lt", "gt", "lte", "gte", "eq", "neq", null, ErrorMessage = "Allowed operations are \"lt\", \"gt\", \"lte\", \"gte\", \"eq\", and \"neq\".")]
         public string? Op { get; set; }
 
         /// <summary>
